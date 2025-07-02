@@ -1,0 +1,25 @@
+name: 'gigo_pipelines'
+version: '1.0.0'
+
+profile: 'gigo_pipelines'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+on-run-start:
+  - "INSTALL postgres"
+  - "LOAD postgres"
+  - "ATTACH 'host=localhost port=5432 user=postgres password=postgres dbname=postgres' AS postgres (TYPE postgres)"
+
+
+models:
+  gigo_pipelines:
+    +materialized: table

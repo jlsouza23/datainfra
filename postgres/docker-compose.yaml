@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  postgres:
+    build: .  # se estiver usando Dockerfile; troque por `image: postgres:15` se não tiver Dockerfile
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - data:/var/lib/postgresql/data  # volume persistente
+      # - ./init.sql:/docker-entrypoint-initdb.d/init.sql  # alternativa se não usar Dockerfile
+
+volumes:
+  data:

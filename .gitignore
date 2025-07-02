@@ -1,0 +1,312 @@
+
+(.venv-duckdb) ➜ gigo_pipelines (main) ✗ dbt run --select customer
+/Users/joaosouza/Documents/kuntokusta/git/datainfra/.venv-duckdb/lib/python3.9/site-packages/urllib3/init.py:35: NotOpenSSLWarning: urllib3 v2 only supports OpenSSL 1.1.1+, currently the 'ssl' module is compiled with 'LibreSSL 2.8.3'. See: https://github.com/urllib3/urllib3/issues/3020
+  warnings.warn(
+22:43:48  Running with dbt=1.9.2
+22:43:48  Registered adapter: duckdb=1.9.2
+22:43:49  Found 1 model, 3 operations, 427 macros
+22:43:49
+22:43:49  Concurrency: 4 threads (target='dev')
+22:43:49
+22:43:49  1 of 3 START hook: gigo_pipelines.on-run-start.0 ............................... [RUN]
+22:43:49  1 of 3 OK hook: gigo_pipelines.on-run-start.0 .................................. [OK in 0.01s]
+22:43:49  2 of 3 START hook: gigo_pipelines.on-run-start.1 ............................... [RUN]
+22:43:49  2 of 3 OK hook: gigo_pipelines.on-run-start.1 .................................. [OK in 0.00s]
+22:43:49  3 of 3 START hook: gigo_pipelines.on-run-start.2 ............................... [RUN]
+
+It looks like your dbt run is in progress! I can see it's running the customer model and has successfully completed the first two on-run-start hooks. The third hook is currently running.
+
+A few observations about your output:
+
+Warning: You're getting a urllib3/OpenSSL compatibility warning. This won't affect functionality but indicates your Python environment is using LibreSSL instead of OpenSSL. This is common on macOS.
+Progress: The run found 1 model (your customer model), 3 operations, and 427 macros, which suggests a healthy dbt project setup.
+Environment: You're using DuckDB as your adapter (version 1.9.2) with dbt 1.9.2, running with 4 threads of concurrency.
+The process appears to be running normally. You should see the actual model execution start after the on-run-start hooks complete. Is there a specific issue you're encountering, or are you just monitoring the progress?
+
+If you're experiencing any problems or the process seems stuck, you can always interrupt with Ctrl+C and try again. The urllib3 warning can be safely ignored unless you want to address the SSL library version in your environment.
+
+
+
+
+eu preciso que o postgres persista o dado em um diretorio local dentro do diretorio do linux
+
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+
+  redis:
+    image: redis:latest
+    restart: always
+
+  airflow-webserver:
+    build: .
+    depends_on:
+      - postgres
+      - redis
+    restart: always
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+    environment:
+      AIRFLOWCOREEXECUTOR: CeleryExecutor
+      AIRFLOWDATABASESQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOWCELERYBROKER_URL: redis://redis:6379/0
+      AIRFLOWCELERYRESULT_BACKEND: db+postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOWCOREFERNET_KEY: ''
+      AIRFLOWCORELOAD_EXAMPLES: 'false'
+      AIRFLOWWEBSERVERRBAC: 'True'
+      AIRFLOWCOREDEFAULT_TIMEZONE: America/Sao_Paulo
+      AIRFLOWSCHEDULERDAG_DIR_LIST_INTERVAL: 10
+
+    command: >
+      bash -c '
+        airflow db upgrade &&
+        airflow users create \
+          --username admin \
+          --firstname Admin \
+          --lastname User \
+          --role Admin \
+          --email admin@example.com \
+          --password admin &&
+        airflow webserver
+      '
+
+  airflow-scheduler:
+    build: .
+    depends_on:
+      - postgres
+      - redis
+    restart: always
+    volumes:
+      - ./dags:/opt/airflow/dags/repo/dags
+    environment:
+      AIRFLOWCOREEXECUTOR: CeleryExecutor
+      AIRFLOWDATABASESQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOWCELERYBROKER_URL: redis://redis:6379/0
+      AIRFLOWCELERYRESULT_BACKEND: db+postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOWCOREDEFAULT_TIMEZONE: America/Sao_Paulo
+      AIRFLOWSCHEDULERDAG_DIR_LIST_INTERVAL: 10
+
+    command: >
+      bash -c 'airflow scheduler'
+
+  airflow-worker:
+    build: .
+    depends_on:
+      - postgres
+      - redis
+    restart: always
+    volumes:
+      - ./dags:/opt/airflow/dags
+    environment:
+      AIRFLOWCOREEXECUTOR: CeleryExecutor
+      AIRFLOWDATABASESQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOWCELERYBROKER_URL: redis://redis:6379/0
+      AIRFLOWCELERYRESULT_BACKEND: db+postgresql+psycopg2://airflow:airflow@postgres/airflow
+      AIRFLOWCOREDEFAULT_TIMEZONE: America/Sao_Paulo
+      AIRFLOWSCHEDULERDAG_DIR_LIST_INTERVAL: 10
+
+    command: >
+      bash -c "airflow celery worker"
+
+volumes:
+  postgres-db-volume:
+
+Para que o PostgreSQL persista os dados em um diretório local específico no Linux, você precisa alterar o volume do PostgreSQL no seu docker-compose.yml. Aqui está a correção:
+
+
+docker-compose.yml com persistência local
+Código 
+Principais alterações:
+Substituí o volume nomeado por um bind mount local:
+De: postgres-db-volume:/var/lib/postgresql/data
+Para: ./postgres_data:/var/lib/postgresql/data
+Removi a seção volumes: no final do arquivo, já que não precisamos mais do volume nomeado.
+Adicionei exposição da porta 5432 (opcional) caso você queira acessar o PostgreSQL diretamente do host.
+Como usar:
+Crie o diretório local (se não existir):
+bash
+mkdir postgres_data
+Configure as permissões (importante no Linux):
+bash
+sudo chown -R 999:999 postgres_data/
+# ou
+chmod 755 postgres_data/
+Execute o Docker Compose:
+bash
+docker-compose up -d
+Alternativas de caminhos:
+Você pode usar outros caminhos conforme sua necessidade:
+
+./postgres_data:/var/lib/postgresql/data (relativo ao diretório atual)
+/home/usuario/postgres_data:/var/lib/postgresql/data (caminho absoluto)
+/var/lib/postgres_data:/var/lib/postgresql/data (diretório do sistema)
+Agora os dados do PostgreSQL serão persistidos no diretório postgres_data do seu projeto e não serão perdidos quando você remover os containers.
+
+
+
+
+
+criar um git ignore para remover tudo q tiver .venv
+
+
+.gitignore para ambientes virtuais Python
+Código 
+Criei um .gitignore completo que irá ignorar:
+
+Ambientes virtuais Python:
+.venv/ - seu ambiente específico
+.venv-*/ - qualquer variação como .venv-duckdb
+venv/, env/, ENV/ - outros nomes comuns
+.virtualenv/, .pyenv/, .conda/, .pipenv/ - outras ferramentas
+**Outras exclus
+
+
+
+# Ambientes virtuais Python
+.venv/
+.venv-*/
+venv/
+env/
+ENV/
+
+# Outros padrões comuns de ambientes virtuais
+.virtualenv/
+.pyenv/
+.conda/
+.pipenv/
+
+# Arquivos Python compilados
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribuição / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+.ENV
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+
+# Database
+*.db
+*.sqlite3
+
+# Docker
+postgres_data/
+docker-compose.override.yml
